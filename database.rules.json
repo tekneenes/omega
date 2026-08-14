@@ -1,6 +1,133 @@
 {
   "rules": {
-    ".read": true,
-    ".write": true
+    "devices": {
+      ".read": true,
+      ".write": true,
+      "$deviceId": {
+        ".read": true,
+        ".write": true,
+        ".indexOn": ["pairCode", "phoneNumber", "email"]
+      }
+    },
+    "pairs": {
+      ".read": true,
+      ".write": true,
+      "$pairCode": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "calls": {
+      "$targetId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "candidates": {
+      "$targetId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "messages": {
+      "$targetId": {
+        ".read": true,
+        ".write": true,
+        ".indexOn": ["timestamp", "senderId"]
+      }
+    },
+    "msg_status": {
+      "$targetId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "typing_status": {
+      "$targetId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "group_chat": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["timestamp"]
+    },
+    "group_typing": {
+      ".read": true,
+      ".write": true
+    },
+    "viewers": {
+      "$broadcasterId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "network_settings": {
+      ".read": true,
+      ".write": true
+    },
+    "telemetry": {
+      "$deviceId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "history_calls": {
+      "$pinCode": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "history_chats": {
+      "$pinCode": {
+        ".read": true,
+        ".write": true,
+        ".indexOn": ["timestamp"]
+      }
+    },
+    "camera_motion_alerts": {
+      "$channelId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "family_cameras": {
+      "$pin": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "camera_signaling": {
+      "$cameraDeviceId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "camera_ice": {
+      "$cameraDeviceId": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "camera_talk_lock": {
+      "$familyPin": {
+        ".read": true,
+        ".write": true
+      }
+    },
+    "group_messages": {
+      "$familyPin": {
+        ".read": true,
+        ".write": true,
+        ".indexOn": ["timestamp"]
+      }
+    },
+    "group_inbox": {
+      "$inboxNode": {
+        ".read": true,
+        ".write": true
+      }
+    }
   }
 }
