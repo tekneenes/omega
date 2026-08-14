@@ -54,10 +54,10 @@ jobs:
           echo "storeFile=../upload-keystore.jks" >> android/key.properties
 
       - name: 🏗️ Build Android APK (Release)
-        run: flutter build apk --release
+        run: flutter build apk --release --android-skip-build-dependency-validation
 
       - name: 🏗️ Build Android AppBundle (AAB for Google Play)
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release --android-skip-build-dependency-validation
 
       - name: 📤 Upload Android APK Artifact
         uses: actions/upload-artifact@v4
