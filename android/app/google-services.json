@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "322375352930",
+    "project_id": "omega-call",
+    "storage_bucket": "omega-call.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:322375352930:android:fb483ff990ec964cc2073b",
+        "android_client_info": {
+          "package_name": "com.omegacall.app.omega_call"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB_G0rADbyWby2BV9o4J8VFMMl_yh90teA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

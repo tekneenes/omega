@@ -1,0 +1,120 @@
+name: Omega CI/CD - Android & iOS Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  # =========================================================================
+  # 🤖 1. ANDROID BUILD JOB (APK & AAB)
+  # =========================================================================
+  build-android:
+    name: 🤖 Build Android (APK & AppBundle)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: ☕ Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: 💙 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: 📦 Install Flutter Dependencies
+        run: flutter pub get
+
+      - name: 🔍 Analyze Dart Code
+        run: flutter analyze lib/ || true
+
+      # Android Signing (If secrets are provided, injects key.properties)
+      - name: 🔑 Configure Android Signing (Optional)
+        if: ${{ env.KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+          echo "storePassword=$KEYSTORE_PASSWORD" >> android/key.properties
+          echo "keyPassword=$KEY_PASSWORD" >> android/key.properties
+          echo "keyAlias=$KEY_ALIAS" >> android/key.properties
+          echo "storeFile=../upload-keystore.jks" >> android/key.properties
+
+      - name: 🏗️ Build Android APK (Release)
+        run: flutter build apk --release
+
+      - name: 🏗️ Build Android AppBundle (AAB for Google Play)
+        run: flutter build appbundle --release
+
+      - name: 📤 Upload Android APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Omega-Android-Release-APK
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+      - name: 📤 Upload Android AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Omega-Android-Release-AAB
+          path: build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: warn
+
+  # =========================================================================
+  # 🍎 2. IOS BUILD JOB
+  # =========================================================================
+  build-ios:
+    name: 🍎 Build iOS (Runner.app / Archive)
+    runs-on: macos-14
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 💙 Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: 📦 Install Flutter Dependencies
+        run: flutter pub get
+
+      - name: 🍎 Install CocoaPods Dependencies
+        run: |
+          cd ios
+          pod repo update
+          pod install
+
+      - name: 🏗️ Build iOS (No Codesign Release)
+        run: flutter build ios --release --no-codesign
+
+      - name: 📦 Package iOS Payload (.zip)
+        run: |
+          cd build/ios/iphoneos
+          mkdir -p Payload
+          cp -r Runner.app Payload/
+          zip -r Omega-iOS-Unsigned.ipa Payload
+          zip -r Omega-iOS-Runner.zip Runner.app
+
+      - name: 📤 Upload iOS IPA / App Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Omega-iOS-Unsigned-Build
+          path: |
+            build/ios/iphoneos/Omega-iOS-Unsigned.ipa
+            build/ios/iphoneos/Omega-iOS-Runner.zip
+          if-no-files-found: warn
