@@ -14,6 +14,7 @@ import 'package:flutter_callkit_incoming/entities/call_event.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import '../firebase_options.dart';
+import 'fcm_v1_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -317,7 +318,20 @@ class NotificationService {
         },
       };
 
-      // 1. Direct FCM Legacy API Call
+      // 1. Direct FCM v1 OAuth2 Push Dispatch (Official Google API)
+      try {
+        await FcmV1Service().sendCallV1Push(
+          targetFcmToken: token,
+          callId: callId,
+          callerName: callerName,
+          callerId: callerId,
+          isVideo: isVideo,
+        );
+      } catch (e) {
+        debugPrint('⚠️ [FCM v1 CALL PUSH NOTICE]: $e');
+      }
+
+      // 2. Direct FCM Legacy API Call (Fallback)
       try {
         final fcmUrl = Uri.parse('https://fcm.googleapis.com/fcm/send');
         await http.post(
@@ -330,7 +344,7 @@ class NotificationService {
         );
       } catch (_) {}
 
-      // 2. Write to RTDB Push Queue (Triggers Cloud Functions or WebSocket listeners)
+      // 3. Write to RTDB Push Queue
       try {
         final queueUrl = Uri.parse('${DefaultFirebaseOptions.rtdbUrl}/fcm_queue.json');
         await http.post(
@@ -354,6 +368,16 @@ class NotificationService {
     try {
       final token = await fetchTargetFcmToken(targetDeviceId);
       if (token == null || token.isEmpty) return;
+
+      // 1. Direct FCM v1 OAuth2 Push Dispatch
+      try {
+        await FcmV1Service().sendMessageV1Push(
+          targetFcmToken: token,
+          senderName: senderName,
+          text: text,
+          senderId: senderId,
+        );
+      } catch (_) {}
 
       final payload = {
         'to': token,
@@ -398,6 +422,14 @@ class NotificationService {
     try {
       final token = await fetchTargetFcmToken(targetDeviceId);
       if (token == null || token.isEmpty) return;
+
+      // 1. Direct FCM v1 OAuth2 Push Dispatch
+      try {
+        await FcmV1Service().sendMotionAlertV1Push(
+          targetFcmToken: token,
+          cameraName: cameraName,
+        );
+      } catch (_) {}
 
       final payload = {
         'to': token,

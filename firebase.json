@@ -1,1 +1,57 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"omega-call","appId":"1:322375352930:android:fb483ff990ec964cc2073b","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"omega-call","appId":"1:322375352930:ios:849fa41bf9cdee43c2073b","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"macos":{"default":{"projectId":"omega-call","appId":"1:322375352930:ios:849fa41bf9cdee43c2073b","uploadDebugSymbols":false,"fileOutput":"macos/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"omega-call","configurations":{"android":"1:322375352930:android:fb483ff990ec964cc2073b","ios":"1:322375352930:ios:849fa41bf9cdee43c2073b","macos":"1:322375352930:ios:849fa41bf9cdee43c2073b","web":"1:322375352930:web:ee907fce6690a0f3c2073b","windows":"1:322375352930:web:7ae4dd10d31f9d98c2073b"}}}}}}
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ],
+  "database": {
+    "rules": "database.rules.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "omega-call",
+          "appId": "1:322375352930:android:fb483ff990ec964cc2073b",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "omega-call",
+          "appId": "1:322375352930:ios:849fa41bf9cdee43c2073b",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "omega-call",
+          "appId": "1:322375352930:ios:849fa41bf9cdee43c2073b",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "omega-call",
+          "configurations": {
+            "android": "1:322375352930:android:fb483ff990ec964cc2073b",
+            "ios": "1:322375352930:ios:849fa41bf9cdee43c2073b",
+            "macos": "1:322375352930:ios:849fa41bf9cdee43c2073b",
+            "web": "1:322375352930:web:ee907fce6690a0f3c2073b",
+            "windows": "1:322375352930:web:7ae4dd10d31f9d98c2073b"
+          }
+        }
+      }
+    }
+  }
+}
