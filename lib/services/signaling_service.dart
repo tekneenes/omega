@@ -601,12 +601,15 @@ class SignalingService {
 
     // Trigger FCM High Priority Data Push for target device (if app is killed/backgrounded)
     try {
-      final fcmToken = await NotificationService().fetchTargetFcmToken(session.receiverId);
-      if (fcmToken != null) {
-        debugPrint('🔥 [FCM PUSH] Target FCM Token: $fcmToken for call ${session.callId}');
-      }
+      await NotificationService().sendCallPushNotification(
+        targetDeviceId: session.receiverId,
+        callId: session.callId,
+        callerName: session.callerName,
+        callerId: session.callerId,
+        isVideo: session.type == CallType.video,
+      );
     } catch (e) {
-      debugPrint('⚠️ [FCM PUSH WARN]: $e');
+      debugPrint('⚠️ [FCM CALL PUSH WARN]: $e');
     }
   }
 
@@ -889,23 +892,43 @@ class SignalingService {
             .child(mainTarget)
             .push()
             .set(message.toJson());
-        return;
       } catch (e) {
         debugPrint('⚠️ [SEND MESSAGE SDK WARN]: $e');
+        // Fallback write via REST API
+        try {
+          final url = Uri.parse('$_activeRtdbUrl/messages/$mainTarget.json');
+          await http.post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(message.toJson()),
+          );
+        } catch (e) {
+          debugPrint('⚠️ [SEND MESSAGE REST ERROR]: $e');
+        }
+      }
+    } else {
+      // Fallback write via REST API
+      try {
+        final url = Uri.parse('$_activeRtdbUrl/messages/$mainTarget.json');
+        await http.post(
+          url,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(message.toJson()),
+        );
+      } catch (e) {
+        debugPrint('⚠️ [SEND MESSAGE REST ERROR]: $e');
       }
     }
 
-    // Fallback write via REST API (only once)
+    // Trigger instant background push for offline/closed devices
     try {
-      final url = Uri.parse('$_activeRtdbUrl/messages/$mainTarget.json');
-      await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(message.toJson()),
+      await NotificationService().sendMessagePushNotification(
+        targetDeviceId: mainTarget,
+        senderName: message.senderName ?? 'Yeni Mesaj',
+        text: message.text,
+        senderId: message.senderId,
       );
-    } catch (e) {
-      debugPrint('⚠️ [SEND MESSAGE REST ERROR]: $e');
-    }
+    } catch (_) {}
   }
 
   Future<void> sendMessageStatusUpdate(String targetDeviceId, String messageId, String status) async {
@@ -2314,6 +2337,14 @@ class SignalingService {
       } catch (e) {
         debugPrint('⚠️ [MOTION SIGNAL HTTP ERROR for $pin]: $e');
       }
+
+      // Dispatch high-priority background push
+      try {
+        await NotificationService().sendCameraMotionPushNotification(
+          targetDeviceId: pin,
+          cameraName: cameraDeviceName,
+        );
+      } catch (_) {}
     }
   }
 

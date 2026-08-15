@@ -25,17 +25,34 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   debugPrint('🔥 [FCM BACKGROUND MSG] Payload: ${message.data}');
   final data = message.data;
-  if (data['type'] == 'incoming_call') {
+  final type = data['type'] ?? '';
+
+  if (type == 'incoming_call') {
     final callerName = data['callerName'] ?? 'Bilinmeyen Arayan';
     final callId = data['callId'] ?? 'call_${DateTime.now().millisecondsSinceEpoch}';
     final isVideo = data['callType'] == 'video';
+    final callerId = data['callerId'] ?? '';
 
     await NotificationService().showNativeIncomingCallUI(
       callId: callId,
       callerName: callerName,
       isVideo: isVideo,
-      handle: data['callerId'] ?? '',
+      handle: callerId,
     );
+  } else if (type == 'new_message') {
+    final senderName = data['senderName'] ?? 'Yeni Mesaj';
+    final messageText = data['text'] ?? 'Bir mesaj aldınız';
+    await NotificationService().showMessageNotification(
+      senderName: senderName,
+      messageText: messageText,
+    );
+  } else if (type == 'motion_alert') {
+    final cameraName = data['cameraName'] ?? 'Güvenlik Kamerası';
+    await NotificationService().showCameraMotionNotification(
+      cameraName: cameraName,
+    );
+  } else if (type == 'end_call' || type == 'cancel_call') {
+    await NotificationService().stopIncomingCallUI();
   }
 }
 
@@ -76,9 +93,9 @@ class NotificationService {
       },
     );
 
-    // 2. High Priority Call Channel for Android
+    // 2. High Priority Channels for Android
     if (!kIsWeb) {
-      const androidChannel = AndroidNotificationChannel(
+      const callChannel = AndroidNotificationChannel(
         'omega_incoming_calls',
         'Gelen Aramalar',
         description: 'OMEGA yüksek öncelikli arama bildirim kanalı',
@@ -87,9 +104,29 @@ class NotificationService {
         enableVibration: true,
       );
 
-      await _localNotifications
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(androidChannel);
+      const msgChannel = AndroidNotificationChannel(
+        'omega_messages',
+        'Mesajlar',
+        description: 'OMEGA mesaj bildirimleri',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+      );
+
+      const cameraChannel = AndroidNotificationChannel(
+        'omega_camera_alerts',
+        'Kamera Hareket İkazları',
+        description: 'OMEGA güvenlik kamerası hareket algılama bildirimleri',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+      );
+
+      final androidPlugin = _localNotifications
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.createNotificationChannel(callChannel);
+      await androidPlugin?.createNotificationChannel(msgChannel);
+      await androidPlugin?.createNotificationChannel(cameraChannel);
     }
 
     // 3. FCM Setup
@@ -103,9 +140,25 @@ class NotificationService {
           badge: true,
           sound: true,
           provisional: false,
+          announcement: true,
+          criticalAlert: true,
         );
 
         debugPrint('🔥 [FCM PERMISSION] Status: ${settings.authorizationStatus}');
+
+        // On iOS, check APNs Token before fetching FCM Token
+        if (defaultTargetPlatform == TargetPlatform.iOS) {
+          try {
+            String? apnsToken = await messaging.getAPNSToken();
+            if (apnsToken == null) {
+              await Future.delayed(const Duration(milliseconds: 1500));
+              apnsToken = await messaging.getAPNSToken();
+            }
+            debugPrint('🍎 [APNS TOKEN READY]: $apnsToken');
+          } catch (e) {
+            debugPrint('🍎 [APNS TOKEN CHECK WARN]: $e');
+          }
+        }
 
         currentFcmToken = await messaging.getToken();
         if (currentFcmToken != null) {
@@ -122,13 +175,25 @@ class NotificationService {
         FirebaseMessaging.onMessage.listen((RemoteMessage message) {
           debugPrint('🔥 [FCM FOREGROUND MSG] Payload: ${message.data}');
           final data = message.data;
-          if (data['type'] == 'incoming_call') {
+          final type = data['type'] ?? '';
+          if (type == 'incoming_call') {
             showNativeIncomingCallUI(
               callId: data['callId'] ?? 'call_${DateTime.now().millisecondsSinceEpoch}',
               callerName: data['callerName'] ?? 'Bilinmeyen Arayan',
               isVideo: data['callType'] == 'video',
               handle: data['callerId'] ?? '',
             );
+          } else if (type == 'new_message') {
+            showMessageNotification(
+              senderName: data['senderName'] ?? 'Yeni Mesaj',
+              messageText: data['text'] ?? 'Bir mesaj aldınız',
+            );
+          } else if (type == 'motion_alert') {
+            showCameraMotionNotification(
+              cameraName: data['cameraName'] ?? 'Güvenlik Kamerası',
+            );
+          } else if (type == 'end_call' || type == 'cancel_call') {
+            stopIncomingCallUI();
           }
         });
       }
@@ -210,6 +275,161 @@ class NotificationService {
       }
     } catch (_) {}
     return null;
+  }
+
+  // --- Push Notification Dispatchers (Direct FCM + RTDB Signal) ---
+
+  /// Dispatches a high-priority push notification for an incoming call to wake up a backgrounded/closed phone
+  Future<void> sendCallPushNotification({
+    required String targetDeviceId,
+    required String callId,
+    required String callerName,
+    required String callerId,
+    required bool isVideo,
+  }) async {
+    try {
+      final token = await fetchTargetFcmToken(targetDeviceId);
+      if (token == null || token.isEmpty) {
+        debugPrint('⚠️ [PUSH DISPATCH] No FCM token found for $targetDeviceId');
+        return;
+      }
+
+      debugPrint('🚀 [PUSH DISPATCH] Sending incoming_call push to $targetDeviceId (Token: ${token.substring(0, 10)}...)');
+
+      final payload = {
+        'to': token,
+        'priority': 'high',
+        'content_available': true,
+        'notification': {
+          'title': 'Gelen ${isVideo ? 'Görüntülü' : 'Sesli'} Arama',
+          'body': '$callerName sizi arıyor...',
+          'sound': 'default',
+          'channel_id': 'omega_incoming_calls',
+          'android_channel_id': 'omega_incoming_calls',
+        },
+        'data': {
+          'type': 'incoming_call',
+          'callId': callId,
+          'callerName': callerName,
+          'callerId': callerId,
+          'callType': isVideo ? 'video' : 'audio',
+          'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+        },
+      };
+
+      // 1. Direct FCM Legacy API Call
+      try {
+        final fcmUrl = Uri.parse('https://fcm.googleapis.com/fcm/send');
+        await http.post(
+          fcmUrl,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'key=AIzaSyB_G0rADbyWby2BV9o4J8VFMMl_yh90teA',
+          },
+          body: jsonEncode(payload),
+        );
+      } catch (_) {}
+
+      // 2. Write to RTDB Push Queue (Triggers Cloud Functions or WebSocket listeners)
+      try {
+        final queueUrl = Uri.parse('${DefaultFirebaseOptions.rtdbUrl}/fcm_queue.json');
+        await http.post(
+          queueUrl,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(payload),
+        );
+      } catch (_) {}
+    } catch (e) {
+      debugPrint('⚠️ [PUSH SEND ERROR]: $e');
+    }
+  }
+
+  /// Dispatches an instant push notification for chat messages
+  Future<void> sendMessagePushNotification({
+    required String targetDeviceId,
+    required String senderName,
+    required String text,
+    required String senderId,
+  }) async {
+    try {
+      final token = await fetchTargetFcmToken(targetDeviceId);
+      if (token == null || token.isEmpty) return;
+
+      final payload = {
+        'to': token,
+        'priority': 'high',
+        'content_available': true,
+        'notification': {
+          'title': senderName,
+          'body': text,
+          'sound': 'default',
+          'channel_id': 'omega_messages',
+          'android_channel_id': 'omega_messages',
+        },
+        'data': {
+          'type': 'new_message',
+          'senderName': senderName,
+          'text': text,
+          'senderId': senderId,
+          'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+        },
+      };
+
+      try {
+        await http.post(
+          Uri.parse('https://fcm.googleapis.com/fcm/send'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'key=AIzaSyB_G0rADbyWby2BV9o4J8VFMMl_yh90teA',
+          },
+          body: jsonEncode(payload),
+        );
+      } catch (_) {}
+    } catch (e) {
+      debugPrint('⚠️ [MSG PUSH ERROR]: $e');
+    }
+  }
+
+  /// Dispatches a high-priority push notification for security camera motion alerts
+  Future<void> sendCameraMotionPushNotification({
+    required String targetDeviceId,
+    required String cameraName,
+  }) async {
+    try {
+      final token = await fetchTargetFcmToken(targetDeviceId);
+      if (token == null || token.isEmpty) return;
+
+      final payload = {
+        'to': token,
+        'priority': 'high',
+        'content_available': true,
+        'notification': {
+          'title': '🚨 HAREKET ALGILANDI',
+          'body': '"$cameraName" kamerasında hareket tespit edildi!',
+          'sound': 'default',
+          'channel_id': 'omega_camera_alerts',
+          'android_channel_id': 'omega_camera_alerts',
+        },
+        'data': {
+          'type': 'motion_alert',
+          'cameraName': cameraName,
+          'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+        },
+      };
+
+      try {
+        await http.post(
+          Uri.parse('https://fcm.googleapis.com/fcm/send'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'key=AIzaSyB_G0rADbyWby2BV9o4J8VFMMl_yh90teA',
+          },
+          body: jsonEncode(payload),
+        );
+      } catch (_) {}
+    } catch (e) {
+      debugPrint('⚠️ [CAMERA PUSH ERROR]: $e');
+    }
   }
 
   Future<void> showNativeIncomingCallUI({

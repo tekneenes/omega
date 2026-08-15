@@ -147,6 +147,16 @@ class FirebaseConfigService {
           ".read": true,
           ".write": true
         }
+      },
+      "fcmTokens": {
+        "\$deviceId": {
+          ".read": true,
+          ".write": true
+        }
+      },
+      "fcm_queue": {
+        ".read": true,
+        ".write": true
       }
     }
   };
