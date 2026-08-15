@@ -642,7 +642,23 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                 (msg.senderId == appState.myProfile!.id ||
                                     msg.senderId.endsWith(appState.myProfile!.id.split('_').last));
 
-                            return _buildGroupMessageBubble(msg, isMe);
+                            final isFirstOfDay = (index == messages.length - 1) ||
+                                !_isSameDay(msg.timestamp, messages[index + 1].timestamp);
+
+                            final bubble = _buildGroupMessageBubble(msg, isMe);
+
+                            if (isFirstOfDay) {
+                              return Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  _buildDateSeparatorPill(msg.timestamp),
+                                  bubble,
+                                ],
+                              );
+                            }
+
+                            return bubble;
                           },
                         ),
                 ),
@@ -687,6 +703,59 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _formatDateHeader(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final msgDate = DateTime(date.year, date.month, date.day);
+
+    if (msgDate == today) {
+      return 'BUGÜN';
+    } else if (msgDate == yesterday) {
+      return 'DÜN';
+    } else if (now.difference(msgDate).inDays < 7 && msgDate.weekday < now.weekday) {
+      return DateFormat('EEEE', 'tr_TR').format(date).toUpperCase();
+    } else if (date.year == now.year) {
+      return DateFormat('d MMMM', 'tr_TR').format(date).toUpperCase();
+    } else {
+      return DateFormat('d MMMM yyyy', 'tr_TR').format(date).toUpperCase();
+    }
+  }
+
+  Widget _buildDateSeparatorPill(DateTime date) {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E293B).withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Text(
+          _formatDateHeader(date),
+          style: const TextStyle(
+            color: Color(0xFF94A3B8),
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
+          ),
+        ),
       ),
     );
   }
