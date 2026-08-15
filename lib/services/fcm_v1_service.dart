@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:googleapis_auth/auth_io.dart';
 import '../firebase_options.dart';
@@ -33,7 +34,6 @@ class FcmV1Service {
     }
 
     if (_serviceAccountMap == null) {
-      // Check if service account is stored in RTDB or locally
       await _tryFetchServiceAccountConfig();
     }
 
@@ -55,6 +55,20 @@ class FcmV1Service {
   }
 
   Future<void> _tryFetchServiceAccountConfig() async {
+    // 1. Try local assets bundle
+    try {
+      final assetStr = await rootBundle.loadString('assets/service_account.json');
+      if (assetStr.isNotEmpty) {
+        final data = jsonDecode(assetStr);
+        if (data is Map && data['private_key'] != null) {
+          _serviceAccountMap = Map<String, dynamic>.from(data);
+          debugPrint('🔐 [FCM v1] Service account loaded directly from assets bundle');
+          return;
+        }
+      }
+    } catch (_) {}
+
+    // 2. Fallback to default RTDB config node
     try {
       final url = Uri.parse('${DefaultFirebaseOptions.rtdbUrl}/_fcm_config.json');
       final res = await http.get(url);

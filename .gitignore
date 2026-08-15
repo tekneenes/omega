@@ -58,3 +58,4 @@ local.properties
 # Symbolication related
 app.*.symbols
 app.*.map.json
+assets/service_account.json
