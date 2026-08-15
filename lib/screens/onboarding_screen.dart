@@ -1,10 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:image_picker/image_picker.dart';
@@ -238,9 +239,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final cam = await Permission.camera.request();
       final notif = await Permission.notification.request();
 
+      bool micG = mic.isGranted;
+      bool camG = cam.isGranted;
+
+      // On iOS, trigger native WebRTC hardware prompt if permission_handler was pending
+      if (defaultTargetPlatform == TargetPlatform.iOS && (!micG || !camG)) {
+        try {
+          final stream = await navigator.mediaDevices.getUserMedia({'audio': true, 'video': true});
+          micG = true;
+          camG = true;
+          for (final t in stream.getTracks()) {
+            t.stop();
+          }
+          await stream.dispose();
+        } catch (_) {}
+      }
+
       setState(() {
-        _micGranted = mic.isGranted;
-        _camGranted = cam.isGranted;
+        _micGranted = micG;
+        _camGranted = camG;
         _notifGranted = notif.isGranted;
       });
 
@@ -297,7 +314,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   if (kIsWeb) {
                     _requestAllPermissions();
                   } else {
-                    final status = await Permission.microphone.request();
+                    var status = await Permission.microphone.request();
+                    if (!status.isGranted && defaultTargetPlatform == TargetPlatform.iOS) {
+                      try {
+                        final stream = await navigator.mediaDevices.getUserMedia({'audio': true, 'video': false});
+                        for (final t in stream.getTracks()) {
+                          t.stop();
+                        }
+                        await stream.dispose();
+                        status = PermissionStatus.granted;
+                      } catch (_) {}
+                    }
                     setState(() => _micGranted = status.isGranted);
                   }
                 },
@@ -312,7 +339,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   if (kIsWeb) {
                     _requestAllPermissions();
                   } else {
-                    final status = await Permission.camera.request();
+                    var status = await Permission.camera.request();
+                    if (!status.isGranted && defaultTargetPlatform == TargetPlatform.iOS) {
+                      try {
+                        final stream = await navigator.mediaDevices.getUserMedia({'audio': false, 'video': true});
+                        for (final t in stream.getTracks()) {
+                          t.stop();
+                        }
+                        await stream.dispose();
+                        status = PermissionStatus.granted;
+                      } catch (_) {}
+                    }
                     setState(() => _camGranted = status.isGranted);
                   }
                 },
