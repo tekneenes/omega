@@ -365,6 +365,17 @@ class _CameraStationScreenState extends State<CameraStationScreen> {
       debugPrint('❌ [CAMERA STATION] WARNING: _localStream is null!');
     }
 
+    // Handle incoming audio tracks from talking viewers (Push-to-Talk)
+    pc.onTrack = (event) {
+      debugPrint('🔊 [CAMERA STATION] Incoming track from viewer $viewerId: kind=${event.track.kind}');
+      if (event.track.kind == 'audio') {
+        event.track.enabled = true;
+        if (event.streams.isNotEmpty) {
+          event.streams[0].getAudioTracks().forEach((t) => t.enabled = true);
+        }
+      }
+    };
+
     // Handle ICE candidates from station → viewer
     pc.onIceCandidate = (candidate) {
       if (candidate.candidate != null && candidate.candidate!.isNotEmpty) {

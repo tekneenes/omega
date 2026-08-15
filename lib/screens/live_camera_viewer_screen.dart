@@ -19,6 +19,8 @@ class _LiveCameraViewerScreenState extends State<LiveCameraViewerScreen> {
   final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
   RTCPeerConnection? _peerConnection;
   MediaStream? _remoteStream;
+  MediaStream? _localAudioStream;
+  MediaStreamTrack? _localAudioTrack;
 
   bool _isConnecting = true;
   bool _isTalking = false;
@@ -73,7 +75,29 @@ class _LiveCameraViewerScreenState extends State<LiveCameraViewerScreen> {
       _peerConnection = await createPeerConnection(kCameraIceServers, _pcConfig);
       debugPrint('✅ [CAMERA VIEWER] PeerConnection created');
 
-      // Add transceivers so WebRTC knows we want to receive audio and video
+      // Initialize microphone for two-way talk (Push-to-Talk)
+      try {
+        final mediaConstraints = {
+          'audio': {
+            'echoCancellation': true,
+            'noiseSuppression': true,
+            'autoGainControl': true,
+          },
+          'video': false,
+        };
+        _localAudioStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+        final audioTracks = _localAudioStream!.getAudioTracks();
+        if (audioTracks.isNotEmpty) {
+          _localAudioTrack = audioTracks.first;
+          _localAudioTrack!.enabled = false; // Initially muted until Push-to-Talk is pressed
+          await _peerConnection!.addTrack(_localAudioTrack!, _localAudioStream!);
+          debugPrint('🎤 [CAMERA VIEWER] Local microphone track added (initially muted for Push-to-Talk)');
+        }
+      } catch (e) {
+        debugPrint('⚠️ [CAMERA VIEWER] Local microphone notice: $e');
+      }
+
+      // Add transceivers so WebRTC knows we receive camera video/audio and can send audio (SendRecv)
       try {
         await _peerConnection!.addTransceiver(
           kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
@@ -81,9 +105,9 @@ class _LiveCameraViewerScreenState extends State<LiveCameraViewerScreen> {
         );
         await _peerConnection!.addTransceiver(
           kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
-          init: RTCRtpTransceiverInit(direction: TransceiverDirection.RecvOnly),
+          init: RTCRtpTransceiverInit(direction: TransceiverDirection.SendRecv),
         );
-        debugPrint('✅ [CAMERA VIEWER] Transceivers added (video+audio RecvOnly)');
+        debugPrint('✅ [CAMERA VIEWER] Transceivers added (video RecvOnly, audio SendRecv)');
       } catch (e) {
         debugPrint('⚠️ [CAMERA VIEWER] Transceiver notice: $e');
       }
@@ -268,6 +292,8 @@ class _LiveCameraViewerScreenState extends State<LiveCameraViewerScreen> {
   void _releaseTalkLock() {
     if (!_isTalking) return; // Already released
     setState(() => _isTalking = false);
+    _localAudioTrack?.enabled = false;
+    debugPrint('🔇 [CAMERA VIEWER] Microphone MUTED');
 
     final appState = Provider.of<AppStateProvider>(context, listen: false);
     final cameraDeviceId = widget.cameraData['deviceId'] ?? '';
@@ -310,6 +336,11 @@ class _LiveCameraViewerScreenState extends State<LiveCameraViewerScreen> {
         );
       } catch (_) {}
     }
+
+    try {
+      _localAudioTrack?.stop();
+      _localAudioStream?.dispose();
+    } catch (_) {}
 
     try {
       _remoteRenderer.srcObject = null;
@@ -521,6 +552,8 @@ class _LiveCameraViewerScreenState extends State<LiveCameraViewerScreen> {
                             ? null
                             : (_) async {
                                 setState(() => _isTalking = true);
+                                _localAudioTrack?.enabled = true;
+                                debugPrint('🎙️ [CAMERA VIEWER] Microphone UNMUTED - streaming voice to camera station');
                                 await SignalingService().updateCameraTalkLock(
                                   familyPin: appState.familyGroupPin,
                                   cameraDeviceId: cameraDeviceId,
